@@ -13,6 +13,29 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::de::Error as SerdeError;
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ProxyConfig {
+    /// HTTP proxy URL
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http: Option<String>,
+
+    /// HTTPS proxy URL
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub https: Option<String>,
+
+    /// SOCKS proxy URL
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub socks: Option<String>,
+
+    /// Proxy authentication username
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+
+    /// Proxy authentication password
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+}
+
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct McpServerConfig {
     pub command: String,

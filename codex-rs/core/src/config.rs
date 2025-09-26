@@ -2,6 +2,7 @@ use crate::config_profile::ConfigProfile;
 use crate::config_types::History;
 use crate::config_types::McpServerConfig;
 use crate::config_types::Notifications;
+use crate::config_types::ProxyConfig;
 use crate::config_types::ReasoningSummaryFormat;
 use crate::config_types::SandboxWorkspaceWrite;
 use crate::config_types::ShellEnvironmentPolicy;
@@ -30,6 +31,8 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::LazyLock;
+use std::sync::Mutex;
 use tempfile::NamedTempFile;
 use toml::Value as TomlValue;
 use toml_edit::Array as TomlArray;
@@ -49,6 +52,14 @@ pub(crate) const PROJECT_DOC_MAX_BYTES: usize = 32 * 1024; // 32 KiB
 pub(crate) const CONFIG_TOML_FILE: &str = "config.toml";
 
 /// Application configuration loaded from disk and merged with overrides.
+pub static CURRENT_CONFIG: LazyLock<Mutex<Option<Config>>> = LazyLock::new(|| Mutex::new(None));
+
+impl Config {
+    pub fn current() -> Option<Config> {
+        CURRENT_CONFIG.lock().unwrap().clone()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
     /// Optional override of model selection.
@@ -117,6 +128,9 @@ pub struct Config {
     ///
     /// If unset the feature is disabled.
     pub notify: Option<Vec<String>>,
+
+    /// Proxy configuration for HTTP/HTTPS/SOCKS requests
+    pub proxy: Option<ProxyConfig>,
 
     /// TUI notifications preference. When set, the TUI will send OSC 9 notifications on approvals
     /// and turn completions when not focused.
@@ -228,7 +242,10 @@ impl Config {
         })?;
 
         // Step 4: merge with the strongly-typed overrides.
-        Self::load_from_base_config_with_overrides(cfg, overrides, codex_home)
+        let config = Self::load_from_base_config_with_overrides(cfg, overrides, codex_home)?;
+        let mut current = CURRENT_CONFIG.lock().unwrap();
+        *current = Some(config.clone());
+        Ok(config)
     }
 }
 
@@ -703,6 +720,10 @@ pub struct ConfigToml {
     /// All characters are inserted as they are received, and no buffering
     /// or placeholder replacement will occur for fast keypress bursts.
     pub disable_paste_burst: Option<bool>,
+
+    /// Proxy configuration for HTTP/HTTPS/SOCKS requests
+    #[serde(default)]
+    pub proxy: Option<ProxyConfig>,
 }
 
 impl From<ConfigToml> for UserSavedConfig {
@@ -1051,6 +1072,7 @@ impl Config {
                 .as_ref()
                 .map(|t| t.notifications.clone())
                 .unwrap_or_default(),
+            proxy: cfg.proxy,
         };
         Ok(config)
     }
@@ -1631,6 +1653,7 @@ model_verbosity = "high"
                 shell_environment_policy: ShellEnvironmentPolicy::default(),
                 user_instructions: None,
                 notify: None,
+                proxy: None,
                 cwd: fixture.cwd(),
                 mcp_servers: HashMap::new(),
                 model_providers: fixture.model_provider_map.clone(),
@@ -1689,6 +1712,7 @@ model_verbosity = "high"
             shell_environment_policy: ShellEnvironmentPolicy::default(),
             user_instructions: None,
             notify: None,
+            proxy: None,
             cwd: fixture.cwd(),
             mcp_servers: HashMap::new(),
             model_providers: fixture.model_provider_map.clone(),
@@ -1762,6 +1786,7 @@ model_verbosity = "high"
             shell_environment_policy: ShellEnvironmentPolicy::default(),
             user_instructions: None,
             notify: None,
+            proxy: None,
             cwd: fixture.cwd(),
             mcp_servers: HashMap::new(),
             model_providers: fixture.model_provider_map.clone(),
@@ -1821,6 +1846,7 @@ model_verbosity = "high"
             shell_environment_policy: ShellEnvironmentPolicy::default(),
             user_instructions: None,
             notify: None,
+            proxy: None,
             cwd: fixture.cwd(),
             mcp_servers: HashMap::new(),
             model_providers: fixture.model_provider_map.clone(),

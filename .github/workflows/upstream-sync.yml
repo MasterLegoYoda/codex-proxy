@@ -1,0 +1,90 @@
+name: Upstream Sync and Build
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Daily at midnight UTC
+  workflow_dispatch:       # Manual trigger
+
+jobs:
+  sync-and-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64-unknown-linux-gnu]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+        targets: ${{ matrix.target }}
+
+    - name: Check upstream for new releases
+      run: |
+        LATEST_UPSTREAM_TAG=$(curl -s https://api.github.com/repos/openai/codex/tags | jq -r '.[0].name')
+        CURRENT_TAG=$(git describe --tags --abbrev=0 || echo "v0.0.0")
+        
+        if [ "$LATEST_UPSTREAM_TAG" != "$CURRENT_TAG" ]; then
+          echo "NEW_RELEASE=true" >> $GITHUB_ENV
+          echo "UPSTREAM_TAG=$LATEST_UPSTREAM_TAG" >> $GITHUB_ENV
+        else
+          echo "NEW_RELEASE=false" >> $GITHUB_ENV
+        fi
+
+    - name: Skip if no new release
+      if: env.NEW_RELEASE == 'false'
+      run: echo "No new release available. Skipping workflow." && exit 0
+
+    - name: Add upstream remote
+      if: env.NEW_RELEASE == 'true'
+      run: |
+        git remote add upstream https://github.com/openai/codex.git
+        git fetch upstream
+
+    - name: Merge upstream changes
+      if: env.NEW_RELEASE == 'true'
+      run: |
+        git checkout main
+        git merge upstream/main --no-edit || true
+        # Handle merge conflicts if any
+
+    - name: Apply proxy patches
+      if: env.NEW_RELEASE == 'true'
+      run: |
+        chmod +x ./scripts/apply-proxy-patches.sh
+        ./scripts/apply-proxy-patches.sh
+
+    - name: Build for target
+      if: env.NEW_RELEASE == 'true'
+      run: |
+        cargo build --release --target ${{ matrix.target }}
+        cargo test --release --target ${{ matrix.target }}
+
+    - name: Create release artifacts
+      if: env.NEW_RELEASE == 'true'
+      run: |
+        mkdir -p release-artifacts
+        cp target/${{ matrix.target }}/release/codex release-artifacts/codex-${{ matrix.target }}
+        tar -czf codex-${{ env.UPSTREAM_TAG }}-${{ matrix.target }}.tar.gz release-artifacts/
+
+    - name: Upload artifacts
+      if: env.NEW_RELEASE == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: codex-${{ env.UPSTREAM_TAG }}-${{ matrix.target }}
+        path: codex-${{ env.UPSTREAM_TAG }}-${{ matrix.target }}.tar.gz
+
+    - name: Notify on success
+      if: success() && env.NEW_RELEASE == 'true'
+      run: |
+        echo "Successfully built codex ${{ env.UPSTREAM_TAG }} with proxy support"
+
+    - name: Notify on failure
+      if: failure() && env.NEW_RELEASE == 'true'
+      run: |
+        echo "Failed to build codex ${{ env.UPSTREAM_TAG }} with proxy support"

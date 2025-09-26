@@ -32,7 +32,7 @@ os_info = { workspace = true }
 portable-pty = { workspace = true }
 rand = { workspace = true }
 regex-lite = { workspace = true }
-reqwest = { workspace = true, features = ["json", "stream"] }
+reqwest = { workspace = true, features = ["json", "stream", "socks"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha1 = { workspace = true }

@@ -70,6 +70,8 @@ Codex CLI supports [MCP servers](./docs/advanced.md#model-context-protocol-mcp).
 
 Codex CLI supports a rich set of configuration options, with preferences stored in `~/.codex/config.toml`. For full configuration options, see [Configuration](./docs/config.md).
 
+**New: Proxy Support** – Configure HTTP/HTTPS/SOCKS proxies in `[proxy]` section of config.toml or via env vars (HTTP_PROXY, HTTPS_PROXY, SOCKS_PROXY). See [docs/config.md#proxy](./docs/config.md#proxy) for details. Useful for corporate networks/firewalls.
+
 ---
 
 ### Docs & FAQ

@@ -1,4 +1,5 @@
 use crate::spawn::CODEX_SANDBOX_ENV_VAR;
+use reqwest::Proxy;
 use reqwest::header::HeaderValue;
 use std::sync::LazyLock;
 use std::sync::Mutex;
@@ -106,6 +107,7 @@ fn sanitize_user_agent(candidate: String, fallback: &str) -> String {
 
 /// Create a reqwest client with default `originator` and `User-Agent` headers set.
 pub fn create_client() -> reqwest::Client {
+    use crate::config::Config;
     use reqwest::header::HeaderMap;
 
     let mut headers = HeaderMap::new();
@@ -113,9 +115,64 @@ pub fn create_client() -> reqwest::Client {
     let ua = get_codex_user_agent();
 
     let mut builder = reqwest::Client::builder()
-        // Set UA via dedicated helper to avoid header validation pitfalls
         .user_agent(ua)
         .default_headers(headers);
+
+    // Add proxy support from configuration
+    if let Some(config) = Config::current() {
+        if let Some(proxy_config) = &config.proxy {
+            // Configure HTTP proxy
+            if let Some(http_proxy) = &proxy_config.http {
+                if let Err(e) = Proxy::http(http_proxy.as_str()) {
+                    tracing::warn!("Invalid HTTP proxy URL '{}': {}", http_proxy, e);
+                } else {
+                    builder = builder.proxy(Proxy::http(http_proxy.as_str()).unwrap());
+                }
+            }
+
+            // Configure HTTPS proxy
+            if let Some(https_proxy) = &proxy_config.https {
+                if let Err(e) = Proxy::https(https_proxy.as_str()) {
+                    tracing::warn!("Invalid HTTPS proxy URL '{}': {}", https_proxy, e);
+                } else {
+                    builder = builder.proxy(Proxy::https(https_proxy.as_str()).unwrap());
+                }
+            }
+
+            // Configure SOCKS proxy (use http with socks URL)
+            if let Some(socks_proxy) = &proxy_config.socks {
+                if let Err(e) = Proxy::http(socks_proxy.as_str()) {
+                    tracing::warn!("Invalid SOCKS proxy URL '{}': {}", socks_proxy, e);
+                } else {
+                    builder = builder.proxy(Proxy::http(socks_proxy.as_str()).unwrap());
+                }
+            }
+        }
+    }
+
+    // Fall back to environment variables
+    if let Ok(http_proxy) = std::env::var("HTTP_PROXY") {
+        if let Err(e) = Proxy::http(http_proxy.as_str()) {
+            tracing::warn!("Invalid HTTP_PROXY env '{}': {}", http_proxy, e);
+        } else {
+            builder = builder.proxy(Proxy::http(http_proxy.as_str()).unwrap());
+        }
+    }
+    if let Ok(https_proxy) = std::env::var("HTTPS_PROXY") {
+        if let Err(e) = Proxy::https(https_proxy.as_str()) {
+            tracing::warn!("Invalid HTTPS_PROXY env '{}': {}", https_proxy, e);
+        } else {
+            builder = builder.proxy(Proxy::https(https_proxy.as_str()).unwrap());
+        }
+    }
+    if let Ok(socks_proxy) = std::env::var("SOCKS_PROXY") {
+        if let Err(e) = Proxy::http(socks_proxy.as_str()) {
+            tracing::warn!("Invalid SOCKS_PROXY env '{}': {}", socks_proxy, e);
+        } else {
+            builder = builder.proxy(Proxy::http(socks_proxy.as_str()).unwrap());
+        }
+    }
+
     if is_sandboxed() {
         builder = builder.no_proxy();
     }

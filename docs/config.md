@@ -411,6 +411,33 @@ set = { CI = "1" }
 include_only = ["PATH", "HOME"]
 ```
 
+## proxy
+
+Proxy support for HTTP, HTTPS, and SOCKS connections. Configured via the `[proxy]` table in `config.toml`. If not set, falls back to standard environment variables (`HTTP_PROXY`, `HTTPS_PROXY`, `SOCKS_PROXY`).
+
+```toml
+[proxy]
+# HTTP proxy URL (e.g., "http://proxy.example.com:8080")
+http = "http://proxy.example.com:8080"
+
+# HTTPS proxy URL (often the same as HTTP)
+https = "http://proxy.example.com:8080"
+
+# SOCKS proxy URL (e.g., "socks5://proxy.example.com:1080")
+socks = "socks5://proxy.example.com:1080"
+
+# Optional: Proxy authentication (embedded in URL preferred, e.g., "http://user:pass@host:port")
+username = "user"
+password = "pass"
+```
+
+- **Authentication**: Reqwest expects credentials in the URL format (e.g., `http://user:pass@host:port`). The separate `username`/`password` fields are for future integration; currently, embed in the URL.
+- **Environment Fallbacks**: If config is unset, uses `HTTP_PROXY` (for HTTP), `HTTPS_PROXY` (for HTTPS), `SOCKS_PROXY` (for SOCKS). SOCKS requires the "socks" feature in reqwest (enabled in Cargo.toml).
+- **Sandbox**: Proxies are disabled in sandboxed environments (`no_proxy()`).
+- **Verification**: Enable debug logs (`RUST_LOG=debug`) to confirm proxy usage in reqwest client creation.
+
+For corporate/firewall environments, this routes all API calls (e.g., to OpenAI) through the proxy.
+
 | Field                     | Type                       | Default | Description                                                                                                                                     |
 | ------------------------- | -------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `inherit`                 | string                     | `all`   | Starting template for the environment:<br>`all` (clone full parent env), `core` (`HOME`, `PATH`, `USER`, …), or `none` (start empty).           |
